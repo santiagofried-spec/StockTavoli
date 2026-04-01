@@ -1,5 +1,5 @@
 # Core
-streamlit==1.28.0   # versión más reciente que soporte rich>=14
+streamlit==1.28.0
 pandas==2.1.1
 openpyxl==3.1.2
 
@@ -7,8 +7,7 @@ openpyxl==3.1.2
 supabase==2.0.3
 httpx==0.23.3
 httpcore==0.16.3
-postgrest==0.7.2
 
-# Librerías internas fijas
+# Librerías internas
 markdown-it-py==4.0.0
 mdurl==0.1.2
