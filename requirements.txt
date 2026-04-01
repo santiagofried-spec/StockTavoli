@@ -1,6 +1,7 @@
-streamlit
-pandas
-openpyxl
-httpx==0.24.1
+streamlit==1.25.0
+pandas==2.1.1
+openpyxl==3.1.2
+httpx==0.23.3
+httpcore==0.16.3
 supabase==2.0.3
-postgrest
+postgrest==0.7.2
