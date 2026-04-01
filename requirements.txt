@@ -5,8 +5,6 @@ openpyxl==3.1.2
 
 # Supabase
 supabase==2.0.3
-httpx==0.23.3
-httpcore==0.16.3
 
 # Librerías internas
 markdown-it-py==4.0.0
