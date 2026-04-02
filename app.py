@@ -160,3 +160,4 @@ if st.sidebar.button("Nuevo insumo"):
     st.session_state.insumo_agregado = False
 if st.sidebar.button("Nuevo movimiento"):
     st.session_state.movimiento_registrado = False
+    st.experimental_rerun()  # fuerza recarga inmediata
