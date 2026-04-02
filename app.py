@@ -21,23 +21,20 @@ if "mostrar_form_salida" not in st.session_state:
     st.session_state.mostrar_form_salida = False
 
 # -----------------------
-# -----------------------
 # Botones de barra lateral
 # -----------------------
 st.sidebar.subheader("Opciones")
 
-# Botón Nuevo Insumo
 if st.sidebar.button("Nuevo insumo"):
-    st.session_state.menu = "Insumos"          # Cambia la sección
-    st.session_state.mostrar_form_insumo = True  # Activa el formulario
-    st.rerun()                                 # Recarga la página para reflejar cambios
+    st.session_state.menu = "Insumos"
+    st.session_state.mostrar_form_insumo = True
+    st.rerun()
 
-# Botón Nuevo Movimiento
 if st.sidebar.button("Nuevo movimiento"):
-    st.session_state.menu = "Registrar compra"    # Cambia a sección de compras
-    st.session_state.mostrar_form_compra = True   # Activa formulario de compra
-    st.session_state.mostrar_form_salida = True   # Activa formulario de salida
-    st.rerun()                                   # Recarga la página para reflejar cambios
+    st.session_state.menu = "Registrar compra"
+    st.session_state.mostrar_form_compra = True
+    st.session_state.mostrar_form_salida = True
+    st.rerun()
 
 # -----------------------
 # Menú principal con radio
@@ -49,69 +46,8 @@ menu = st.sidebar.radio(
         st.session_state.get("menu", "Dashboard")
     )
 )
-
-# Sincronizar session_state con el radio
 st.session_state.menu = menu
 
-# -----------------------
-# Mostrar formularios según session_state
-# -----------------------
-# Insumo
-if menu == "Insumos" and st.session_state.get("mostrar_form_insumo", False):
-    st.subheader("Agregar nuevo insumo")
-    nombre = st.text_input("Nombre del insumo")
-    categoria = st.text_input("Categoría")
-    unidad = st.selectbox("Unidad", ["g", "kg", "ml", "L", "un"])
-    stock_actual = st.number_input("Stock actual", min_value=0.0, value=0.0)
-    stock_minimo = st.number_input("Stock mínimo", min_value=0.0, value=0.0)
-    costo_unitario = st.number_input("Costo unitario", min_value=0.0, value=0.0)
-    proveedor = st.text_input("Proveedor")
-
-    if st.button("Agregar insumo"):
-        if nombre.strip():
-            add_insumo(nombre, categoria, unidad, stock_actual, stock_minimo, costo_unitario, proveedor)
-            st.success(f"Insumo '{nombre}' agregado correctamente.")
-            st.session_state.mostrar_form_insumo = False  # Oculta el formulario
-            st.rerun()  # Recarga para actualizar listado
-        else:
-            st.error("El nombre es obligatorio.")
-
-# Registrar compra
-if menu == "Registrar compra" and st.session_state.get("mostrar_form_compra", False):
-    st.subheader("Registrar compra")
-    insumos = get_insumos()
-    if not insumos.empty:
-        opciones = {f"{row['nombre']} ({row['unidad']})": row["id"] for _, row in insumos.iterrows()}
-        insumo_label = st.selectbox("Selecciona un insumo", list(opciones.keys()))
-        cantidad = st.number_input("Cantidad comprada", min_value=0.01, value=1.0)
-        motivo = st.text_input("Proveedor / detalle")
-        if st.button("Registrar compra"):
-            try:
-                registrar_movimiento("compra", opciones[insumo_label], cantidad, motivo)
-                st.success("Compra registrada correctamente.")
-                st.session_state.mostrar_form_compra = False
-                st.rerun()
-            except Exception as e:
-                st.error(str(e))
-
-# Registrar salida/merma
-if menu == "Registrar salida/merma" and st.session_state.get("mostrar_form_salida", False):
-    st.subheader("Registrar salida / merma")
-    insumos = get_insumos()
-    if not insumos.empty:
-        opciones = {f"{row['nombre']} ({row['unidad']})": row["id"] for _, row in insumos.iterrows()}
-        tipo = st.selectbox("Tipo de salida", ["merma", "consumo", "ajuste"])
-        insumo_label = st.selectbox("Selecciona un insumo", list(opciones.keys()))
-        cantidad = st.number_input("Cantidad a descontar", min_value=0.01, value=1.0)
-        motivo = st.text_input("Motivo")
-        if st.button("Registrar salida"):
-            try:
-                registrar_movimiento(tipo, opciones[insumo_label], cantidad, motivo)
-                st.success("Salida registrada correctamente.")
-                st.session_state.mostrar_form_salida = False
-                st.rerun()
-            except Exception as e:
-                st.error(str(e))
 # -----------------------
 # Dashboard
 # -----------------------
@@ -150,7 +86,9 @@ if menu == "Dashboard":
 elif menu == "Insumos":
     st.subheader("Gestión de insumos")
 
-    if st.session_state.mostrar_form_insumo:
+    # Mostrar formulario si el estado está activo
+    if st.session_state.get("mostrar_form_insumo", False):
+        st.subheader("Agregar nuevo insumo")
         nombre = st.text_input("Nombre del insumo")
         categoria = st.text_input("Categoría")
         unidad = st.selectbox("Unidad", ["g", "kg", "ml", "L", "un"])
@@ -164,9 +102,11 @@ elif menu == "Insumos":
                 add_insumo(nombre, categoria, unidad, stock_actual, stock_minimo, costo_unitario, proveedor)
                 st.success(f"Insumo '{nombre}' agregado correctamente.")
                 st.session_state.mostrar_form_insumo = False
+                st.rerun()
             else:
                 st.error("El nombre es obligatorio.")
 
+    # Listado de insumos
     st.subheader("Listado de insumos")
     insumos = get_insumos()
     if not insumos.empty:
@@ -183,8 +123,7 @@ elif menu == "Registrar compra":
     if insumos.empty:
         st.info("Primero debes cargar insumos.")
     else:
-        # Mostrar formulario solo si el estado es True
-        if st.session_state.mostrar_form_compra:
+        if st.session_state.get("mostrar_form_compra", False):
             opciones = {f"{row['nombre']} ({row['unidad']})": row["id"] for _, row in insumos.iterrows()}
             insumo_label = st.selectbox("Selecciona un insumo", list(opciones.keys()))
             cantidad = st.number_input("Cantidad comprada", min_value=0.01, value=1.0)
@@ -194,7 +133,8 @@ elif menu == "Registrar compra":
                 try:
                     registrar_movimiento("compra", opciones[insumo_label], cantidad, motivo)
                     st.success("Compra registrada correctamente.")
-                    st.session_state.mostrar_form_compra = False  # ocultar formulario después de registrar
+                    st.session_state.mostrar_form_compra = False
+                    st.rerun()
                 except Exception as e:
                     st.error(str(e))
 
@@ -207,7 +147,7 @@ elif menu == "Registrar salida/merma":
     if insumos.empty:
         st.info("Primero debes cargar insumos.")
     else:
-        if st.session_state.mostrar_form_salida:
+        if st.session_state.get("mostrar_form_salida", False):
             opciones = {f"{row['nombre']} ({row['unidad']})": row["id"] for _, row in insumos.iterrows()}
             tipo = st.selectbox("Tipo de salida", ["merma", "consumo", "ajuste"])
             insumo_label = st.selectbox("Selecciona un insumo", list(opciones.keys()))
@@ -219,8 +159,10 @@ elif menu == "Registrar salida/merma":
                     registrar_movimiento(tipo, opciones[insumo_label], cantidad, motivo)
                     st.success("Salida registrada correctamente.")
                     st.session_state.mostrar_form_salida = False
+                    st.rerun()
                 except Exception as e:
                     st.error(str(e))
+
 # -----------------------
 # Movimientos
 # -----------------------
