@@ -7,7 +7,7 @@ from db import get_insumos, add_insumo, registrar_movimiento, get_movimientos
 st.set_page_config(page_title="Control de Stock - Tavoli", layout="wide")
 
 # -----------------------
-# Inicialización del estado
+# Inicialización de session_state
 # -----------------------
 if "menu" not in st.session_state:
     st.session_state.menu = "Dashboard"
@@ -17,8 +17,9 @@ if "movimiento_registrado" not in st.session_state:
     st.session_state.movimiento_registrado = False
 
 # -----------------------
-# Botones en la barra lateral
+# Botones de barra lateral
 # -----------------------
+st.sidebar.subheader("Opciones")
 if st.sidebar.button("Nuevo insumo"):
     st.session_state.menu = "Insumos"
     st.session_state.insumo_agregado = False
@@ -75,22 +76,23 @@ if menu == "Dashboard":
 # -----------------------
 elif menu == "Insumos":
     st.subheader("Gestión de insumos")
-    with st.form("form_insumo"):
-        nombre = st.text_input("Nombre del insumo")
-        categoria = st.text_input("Categoría")
-        unidad = st.selectbox("Unidad", ["g", "kg", "ml", "L", "un"])
-        stock_actual = st.number_input("Stock actual", min_value=0.0, value=0.0)
-        stock_minimo = st.number_input("Stock mínimo", min_value=0.0, value=0.0)
-        costo_unitario = st.number_input("Costo unitario", min_value=0.0, value=0.0)
-        proveedor = st.text_input("Proveedor")
-        submitted = st.form_submit_button("Agregar insumo")
-        if submitted and not st.session_state.insumo_agregado:
-            if nombre.strip():
-                add_insumo(nombre, categoria, unidad, stock_actual, stock_minimo, costo_unitario, proveedor)
-                st.success(f"Insumo '{nombre}' agregado correctamente.")
-                st.session_state.insumo_agregado = True
-            else:
-                st.error("El nombre es obligatorio.")
+
+    nombre = st.text_input("Nombre del insumo")
+    categoria = st.text_input("Categoría")
+    unidad = st.selectbox("Unidad", ["g", "kg", "ml", "L", "un"])
+    stock_actual = st.number_input("Stock actual", min_value=0.0, value=0.0)
+    stock_minimo = st.number_input("Stock mínimo", min_value=0.0, value=0.0)
+    costo_unitario = st.number_input("Costo unitario", min_value=0.0, value=0.0)
+    proveedor = st.text_input("Proveedor")
+
+    if st.button("Agregar insumo") and not st.session_state.insumo_agregado:
+        if nombre.strip():
+            add_insumo(nombre, categoria, unidad, stock_actual, stock_minimo, costo_unitario, proveedor)
+            st.success(f"Insumo '{nombre}' agregado correctamente.")
+            st.session_state.insumo_agregado = True
+            st.experimental_rerun()
+        else:
+            st.error("El nombre es obligatorio.")
 
     st.subheader("Listado de insumos")
     insumos = get_insumos()
@@ -109,18 +111,18 @@ elif menu == "Registrar compra":
         st.info("Primero debes cargar insumos.")
     else:
         opciones = {f"{row['nombre']} ({row['unidad']})": row["id"] for _, row in insumos.iterrows()}
-        with st.form("form_compra"):
-            insumo_label = st.selectbox("Selecciona un insumo", list(opciones.keys()))
-            cantidad = st.number_input("Cantidad comprada", min_value=0.01, value=1.0)
-            motivo = st.text_input("Proveedor / detalle")
-            submitted = st.form_submit_button("Registrar compra")
-            if submitted and not st.session_state.movimiento_registrado:
-                try:
-                    registrar_movimiento("compra", opciones[insumo_label], cantidad, motivo)
-                    st.success("Compra registrada correctamente.")
-                    st.session_state.movimiento_registrado = True
-                except Exception as e:
-                    st.error(str(e))
+        insumo_label = st.selectbox("Selecciona un insumo", list(opciones.keys()))
+        cantidad = st.number_input("Cantidad comprada", min_value=0.01, value=1.0)
+        motivo = st.text_input("Proveedor / detalle")
+
+        if st.button("Registrar compra") and not st.session_state.movimiento_registrado:
+            try:
+                registrar_movimiento("compra", opciones[insumo_label], cantidad, motivo)
+                st.success("Compra registrada correctamente.")
+                st.session_state.movimiento_registrado = True
+                st.experimental_rerun()
+            except Exception as e:
+                st.error(str(e))
 
 # -----------------------
 # Registrar Salida / Merma
@@ -132,19 +134,19 @@ elif menu == "Registrar salida/merma":
         st.info("Primero debes cargar insumos.")
     else:
         opciones = {f"{row['nombre']} ({row['unidad']})": row["id"] for _, row in insumos.iterrows()}
-        with st.form("form_salida"):
-            tipo = st.selectbox("Tipo de salida", ["merma", "consumo", "ajuste"])
-            insumo_label = st.selectbox("Selecciona un insumo", list(opciones.keys()))
-            cantidad = st.number_input("Cantidad a descontar", min_value=0.01, value=1.0)
-            motivo = st.text_input("Motivo")
-            submitted = st.form_submit_button("Registrar salida")
-            if submitted and not st.session_state.movimiento_registrado:
-                try:
-                    registrar_movimiento(tipo, opciones[insumo_label], cantidad, motivo)
-                    st.success("Salida registrada correctamente.")
-                    st.session_state.movimiento_registrado = True
-                except Exception as e:
-                    st.error(str(e))
+        tipo = st.selectbox("Tipo de salida", ["merma", "consumo", "ajuste"])
+        insumo_label = st.selectbox("Selecciona un insumo", list(opciones.keys()))
+        cantidad = st.number_input("Cantidad a descontar", min_value=0.01, value=1.0)
+        motivo = st.text_input("Motivo")
+
+        if st.button("Registrar salida") and not st.session_state.movimiento_registrado:
+            try:
+                registrar_movimiento(tipo, opciones[insumo_label], cantidad, motivo)
+                st.success("Salida registrada correctamente.")
+                st.session_state.movimiento_registrado = True
+                st.experimental_rerun()
+            except Exception as e:
+                st.error(str(e))
 
 # -----------------------
 # Movimientos
