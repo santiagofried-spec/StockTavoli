@@ -21,18 +21,21 @@ if "mostrar_form_salida" not in st.session_state:
     st.session_state.mostrar_form_salida = False
 
 # -----------------------
+# -----------------------
 # Botones de barra lateral
+# -----------------------
 st.sidebar.subheader("Opciones")
+
 if st.sidebar.button("Nuevo insumo"):
     st.session_state.menu = "Insumos"
     st.session_state.mostrar_form_insumo = True
-    st.experimental_rerun()  # fuerza recarga y muestra el formulario
+    st.rerun()  # fuerza recarga y muestra el formulario inmediatamente
 
 if st.sidebar.button("Nuevo movimiento"):
     st.session_state.menu = "Registrar compra"
     st.session_state.mostrar_form_compra = True
-    st.experimental_rerun()  # fuerza recarga y muestra el formulario
-
+    st.session_state.mostrar_form_salida = True
+    st.rerun()  # fuerza recarga y muestra los formularios de compra/salida
 # Menú principal con radio
 menu = st.sidebar.radio(
     "Navegación",
