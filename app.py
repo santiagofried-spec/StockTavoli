@@ -13,12 +13,15 @@ if "menu" not in st.session_state:
     st.session_state.menu = "Dashboard"
 
 # Formularios visibles o no
-if "mostrar_form_insumo" not in st.session_state:
-    st.session_state.mostrar_form_insumo = False
-if "mostrar_form_compra" not in st.session_state:
-    st.session_state.mostrar_form_compra = False
-if "mostrar_form_salida" not in st.session_state:
-    st.session_state.mostrar_form_salida = False
+for key in ["mostrar_form_insumo", "mostrar_form_compra", "mostrar_form_salida"]:
+    if key not in st.session_state:
+        st.session_state[key] = False
+
+# -----------------------
+# Función callback para radio menu
+# -----------------------
+def cambiar_menu():
+    st.session_state.menu = st.session_state.radio_menu
 
 # -----------------------
 # Botones de barra lateral
@@ -37,21 +40,22 @@ if st.sidebar.button("Nuevo movimiento"):
     st.rerun()
 
 # -----------------------
-# Menú principal con radio
+# Menú principal con radio (sincronizado)
 # -----------------------
-menu = st.sidebar.radio(
+menu_opciones = ["Dashboard", "Insumos", "Registrar compra", "Registrar salida/merma", "Movimientos"]
+
+st.sidebar.radio(
     "Navegación",
-    ["Dashboard", "Insumos", "Registrar compra", "Registrar salida/merma", "Movimientos"],
-    index=["Dashboard", "Insumos", "Registrar compra", "Registrar salida/merma", "Movimientos"].index(
-        st.session_state.get("menu", "Dashboard")
-    )
+    menu_opciones,
+    index=menu_opciones.index(st.session_state.get("menu", "Dashboard")),
+    key="radio_menu",
+    on_change=cambiar_menu  # callback para mantener session_state actualizado
 )
-st.session_state.menu = menu
 
 # -----------------------
-# Dashboard
+# DASHBOARD
 # -----------------------
-if menu == "Dashboard":
+if st.session_state.menu == "Dashboard":
     st.subheader("Dashboard")
     insumos = get_insumos()
     if insumos.empty:
@@ -81,13 +85,12 @@ if menu == "Dashboard":
             )
 
 # -----------------------
-# Gestión de Insumos
+# INSUMOS
 # -----------------------
-elif menu == "Insumos":
+elif st.session_state.menu == "Insumos":
     st.subheader("Gestión de insumos")
 
-    # Mostrar formulario si el estado está activo
-    if st.session_state.get("mostrar_form_insumo", False):
+    if st.session_state.mostrar_form_insumo:
         st.subheader("Agregar nuevo insumo")
         nombre = st.text_input("Nombre del insumo")
         categoria = st.text_input("Categoría")
@@ -115,15 +118,15 @@ elif menu == "Insumos":
         st.info("No hay insumos cargados.")
 
 # -----------------------
-# Registrar Compra
+# REGISTRAR COMPRA
 # -----------------------
-elif menu == "Registrar compra":
+elif st.session_state.menu == "Registrar compra":
     st.subheader("Registrar compra")
     insumos = get_insumos()
     if insumos.empty:
         st.info("Primero debes cargar insumos.")
     else:
-        if st.session_state.get("mostrar_form_compra", False):
+        if st.session_state.mostrar_form_compra:
             opciones = {f"{row['nombre']} ({row['unidad']})": row["id"] for _, row in insumos.iterrows()}
             insumo_label = st.selectbox("Selecciona un insumo", list(opciones.keys()))
             cantidad = st.number_input("Cantidad comprada", min_value=0.01, value=1.0)
@@ -139,15 +142,15 @@ elif menu == "Registrar compra":
                     st.error(str(e))
 
 # -----------------------
-# Registrar Salida / Merma
+# REGISTRAR SALIDA / MERMA
 # -----------------------
-elif menu == "Registrar salida/merma":
+elif st.session_state.menu == "Registrar salida/merma":
     st.subheader("Registrar salida / merma")
     insumos = get_insumos()
     if insumos.empty:
         st.info("Primero debes cargar insumos.")
     else:
-        if st.session_state.get("mostrar_form_salida", False):
+        if st.session_state.mostrar_form_salida:
             opciones = {f"{row['nombre']} ({row['unidad']})": row["id"] for _, row in insumos.iterrows()}
             tipo = st.selectbox("Tipo de salida", ["merma", "consumo", "ajuste"])
             insumo_label = st.selectbox("Selecciona un insumo", list(opciones.keys()))
@@ -164,9 +167,9 @@ elif menu == "Registrar salida/merma":
                     st.error(str(e))
 
 # -----------------------
-# Movimientos
+# MOVIMIENTOS
 # -----------------------
-elif menu == "Movimientos":
+elif st.session_state.menu == "Movimientos":
     st.subheader("Historial de movimientos")
     movimientos = get_movimientos()
     if movimientos.empty:
