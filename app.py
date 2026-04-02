@@ -28,10 +28,9 @@ if "movimiento_registrado" not in st.session_state:
 # -----------------------
 menu = st.sidebar.radio(
     "Navegación",
-    ["Dashboard", "Insumos", "Registrar compra", "Registrar salida/merma", "Movimientos"]
+    ["Dashboard", "Insumos", "Registrar compra", "Registrar salida/merma", "Movimientos"],
     index=0 if "menu" not in st.session_state else ["Dashboard", "Insumos", "Registrar compra", "Registrar salida/merma", "Movimientos"].index(st.session_state.menu)
 )
-
 # -----------------------
 # Dashboard
 # -----------------------
