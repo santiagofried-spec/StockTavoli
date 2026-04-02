@@ -1,10 +1,14 @@
 import streamlit as st
-from db import get_insumos, add_insumo, registrar_movimiento, get_movimientos
 
 # -----------------------
 # Configuración de la página
 # -----------------------
 st.set_page_config(page_title="Control de Stock - Tavoli", layout="wide")
+
+# -----------------------
+# Ahora sí importamos funciones de DB
+# -----------------------
+from db import get_insumos, add_insumo, registrar_movimiento, get_movimientos
 
 # -----------------------
 # Título
@@ -33,13 +37,11 @@ menu = st.sidebar.radio(
 if menu == "Dashboard":
     st.subheader("Dashboard")
     insumos = get_insumos()
-
     if insumos.empty:
         st.info("No hay insumos cargados todavía.")
     else:
         total_insumos = len(insumos)
         stock_bajo = len(insumos[insumos["stock_actual"] <= insumos["stock_minimo"]])
-
         c1, c2 = st.columns(2)
         c1.metric("Cantidad de insumos", total_insumos)
         c2.metric("Insumos con stock bajo", stock_bajo)
@@ -66,7 +68,6 @@ if menu == "Dashboard":
 # -----------------------
 elif menu == "Insumos":
     st.subheader("Gestión de insumos")
-
     with st.form("form_insumo"):
         nombre = st.text_input("Nombre del insumo")
         categoria = st.text_input("Categoría")
@@ -76,7 +77,6 @@ elif menu == "Insumos":
         costo_unitario = st.number_input("Costo unitario", min_value=0.0, value=0.0)
         proveedor = st.text_input("Proveedor")
         submitted = st.form_submit_button("Agregar insumo")
-
         if submitted and not st.session_state.insumo_agregado:
             if nombre.strip():
                 add_insumo(nombre, categoria, unidad, stock_actual, stock_minimo, costo_unitario, proveedor)
@@ -98,18 +98,15 @@ elif menu == "Insumos":
 elif menu == "Registrar compra":
     st.subheader("Registrar compra")
     insumos = get_insumos()
-
     if insumos.empty:
         st.info("Primero debes cargar insumos.")
     else:
         opciones = {f"{row['nombre']} ({row['unidad']})": row["id"] for _, row in insumos.iterrows()}
-
         with st.form("form_compra"):
             insumo_label = st.selectbox("Selecciona un insumo", list(opciones.keys()))
             cantidad = st.number_input("Cantidad comprada", min_value=0.01, value=1.0)
             motivo = st.text_input("Proveedor / detalle")
             submitted = st.form_submit_button("Registrar compra")
-
             if submitted and not st.session_state.movimiento_registrado:
                 try:
                     registrar_movimiento("compra", opciones[insumo_label], cantidad, motivo)
@@ -124,19 +121,16 @@ elif menu == "Registrar compra":
 elif menu == "Registrar salida/merma":
     st.subheader("Registrar salida / merma")
     insumos = get_insumos()
-
     if insumos.empty:
         st.info("Primero debes cargar insumos.")
     else:
         opciones = {f"{row['nombre']} ({row['unidad']})": row["id"] for _, row in insumos.iterrows()}
-
         with st.form("form_salida"):
             tipo = st.selectbox("Tipo de salida", ["merma", "consumo", "ajuste"])
             insumo_label = st.selectbox("Selecciona un insumo", list(opciones.keys()))
             cantidad = st.number_input("Cantidad a descontar", min_value=0.01, value=1.0)
             motivo = st.text_input("Motivo")
             submitted = st.form_submit_button("Registrar salida")
-
             if submitted and not st.session_state.movimiento_registrado:
                 try:
                     registrar_movimiento(tipo, opciones[insumo_label], cantidad, motivo)
@@ -151,7 +145,6 @@ elif menu == "Registrar salida/merma":
 elif menu == "Movimientos":
     st.subheader("Historial de movimientos")
     movimientos = get_movimientos()
-
     if movimientos.empty:
         st.info("No hay movimientos registrados.")
     else:
