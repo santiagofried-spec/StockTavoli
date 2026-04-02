@@ -12,38 +12,51 @@ st.set_page_config(page_title="Control de Stock - Tavoli", layout="wide")
 if "menu" not in st.session_state:
     st.session_state.menu = "Dashboard"
 
-if "mostrar_form_insumo" not in st.session_state:
-    st.session_state.mostrar_form_insumo = False
-if "mostrar_form_compra" not in st.session_state:
-    st.session_state.mostrar_form_compra = False
-if "mostrar_form_salida" not in st.session_state:
-    st.session_state.mostrar_form_salida = False
+# Formularios visibles
+for key in ["mostrar_form_insumo", "mostrar_form_compra", "mostrar_form_salida",
+            "nuevo_movimiento_activo", "nuevo_movimiento_tipo"]:
+    if key not in st.session_state:
+        st.session_state[key] = False if "mostrar" in key or "activo" in key else "Compra"
 
 # -----------------------
 # Botones de barra lateral
 # -----------------------
 st.sidebar.subheader("Opciones")
 
+# Nuevo insumo
 if st.sidebar.button("Nuevo insumo"):
     st.session_state.menu = "Insumos"
     st.session_state.mostrar_form_insumo = True
 
+# Nuevo movimiento
 if st.sidebar.button("Nuevo movimiento"):
-    # Preguntar qué tipo de movimiento abrir
-    tipo = st.sidebar.radio("Tipo de nuevo movimiento", ["Compra", "Salida/Merma"], key="nuevo_movimiento_tipo")
+    st.session_state.nuevo_movimiento_activo = True
+    st.session_state.nuevo_movimiento_tipo = "Compra"  # valor inicial
+
+# Radio de tipo de movimiento (solo si el flujo está activo)
+if st.session_state.nuevo_movimiento_activo:
+    tipo = st.sidebar.radio(
+        "Tipo de nuevo movimiento",
+        ["Compra", "Salida/Merma"],
+        index=["Compra", "Salida/Merma"].index(st.session_state.nuevo_movimiento_tipo),
+        key="nuevo_movimiento_tipo_radio"
+    )
+    st.session_state.nuevo_movimiento_tipo = tipo
     if tipo == "Compra":
         st.session_state.menu = "Registrar compra"
         st.session_state.mostrar_form_compra = True
+        st.session_state.mostrar_form_salida = False
     else:
         st.session_state.menu = "Registrar salida/merma"
         st.session_state.mostrar_form_salida = True
+        st.session_state.mostrar_form_compra = False
 
 # -----------------------
 # Menú principal con radio
 # -----------------------
 menu_options = ["Dashboard", "Insumos", "Registrar compra", "Registrar salida/merma", "Movimientos"]
 menu = st.sidebar.radio("Navegación", menu_options, index=menu_options.index(st.session_state.menu))
-st.session_state.menu = menu  # sincronizar
+st.session_state.menu = menu
 
 # -----------------------
 # Dashboard
@@ -127,6 +140,7 @@ elif menu == "Registrar compra":
                     registrar_movimiento("compra", opciones[insumo_label], cantidad, motivo)
                     st.success("Compra registrada correctamente.")
                     st.session_state.mostrar_form_compra = False
+                    st.session_state.nuevo_movimiento_activo = False
                 except Exception as e:
                     st.error(str(e))
 
@@ -151,6 +165,7 @@ elif menu == "Registrar salida/merma":
                     registrar_movimiento(tipo, opciones[insumo_label], cantidad, motivo)
                     st.success("Salida registrada correctamente.")
                     st.session_state.mostrar_form_salida = False
+                    st.session_state.nuevo_movimiento_activo = False
                 except Exception as e:
                     st.error(str(e))
 
