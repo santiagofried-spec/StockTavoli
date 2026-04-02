@@ -154,22 +154,66 @@ elif menu == "Insumos":
 # -----------------------
 elif menu == "Recetas":
     st.subheader("Gestión de recetas")
+    insumos = get_insumos()
 
     # --- Crear nueva receta ---
+    # Uses session_state to accumulate ingredients before saving,
+    # so no DB writes happen until the user clicks "Guardar receta".
     if st.session_state.mostrar_form_receta:
-        with st.form("form_nueva_receta"):
-            nombre_receta = st.text_input("Nombre de la receta")
-            submitted = st.form_submit_button("Crear receta")
-        if submitted:
-            if nombre_receta.strip():
-                add_receta(nombre_receta.strip())
-                st.success(f"Receta '{nombre_receta}' creada.")
-                st.session_state.mostrar_form_receta = False
-            else:
+        if "receta_ingredientes_temp" not in st.session_state:
+            st.session_state.receta_ingredientes_temp = []  # list of {insumo_id, label, cantidad}
+
+        st.markdown("#### Nueva receta")
+        nombre_receta = st.text_input("Nombre de la receta", key="input_nombre_receta")
+
+        # Ingredient builder
+        if not insumos.empty:
+            opciones = build_opciones(insumos)
+            col1, col2, col3 = st.columns([3, 1, 1])
+            ing_label = col1.selectbox("Insumo", list(opciones.keys()), key="new_ing_label")
+            ing_cantidad = col2.number_input("Cantidad", min_value=0.01, value=1.0, key="new_ing_cantidad")
+            if col3.button("➕ Añadir", key="btn_add_ing"):
+                st.session_state.receta_ingredientes_temp.append({
+                    "insumo_id": opciones[ing_label],
+                    "label": ing_label,
+                    "cantidad": ing_cantidad,
+                })
+
+        # Show accumulated ingredients
+        if st.session_state.receta_ingredientes_temp:
+            st.markdown("**Ingredientes agregados:**")
+            for i, ing in enumerate(st.session_state.receta_ingredientes_temp):
+                c1, c2 = st.columns([5, 1])
+                c1.write(f"• {ing['label']} — {ing['cantidad']}")
+                if c2.button("🗑", key=f"del_temp_{i}"):
+                    st.session_state.receta_ingredientes_temp.pop(i)
+                    st.rerun()
+        else:
+            st.caption("Todavía no agregaste ingredientes.")
+
+        col_save, col_cancel = st.columns([1, 1])
+        if col_save.button("💾 Guardar receta", key="btn_guardar_receta"):
+            if not nombre_receta.strip():
                 st.error("El nombre es obligatorio.")
+            elif not st.session_state.receta_ingredientes_temp:
+                st.error("Agregá al menos un ingrediente.")
+            else:
+                receta_id = add_receta(nombre_receta.strip())
+                for ing in st.session_state.receta_ingredientes_temp:
+                    add_ingrediente_receta(receta_id, ing["insumo_id"], ing["cantidad"])
+                st.success(f"Receta '{nombre_receta}' guardada con {len(st.session_state.receta_ingredientes_temp)} ingrediente(s).")
+                st.session_state.receta_ingredientes_temp = []
+                st.session_state.mostrar_form_receta = False
+                st.rerun()
+
+        if col_cancel.button("Cancelar", key="btn_cancelar_receta"):
+            st.session_state.receta_ingredientes_temp = []
+            st.session_state.mostrar_form_receta = False
+            st.rerun()
+
         st.divider()
 
-    # --- Listado de recetas con ingredientes ---
+    # --- Listado de recetas con edición de ingredientes ---
     recetas = get_recetas()
     if recetas.empty:
         st.info("No hay recetas cargadas. Usá el botón '📋 Nueva receta' para crear una.")
@@ -179,31 +223,31 @@ elif menu == "Recetas":
                 ingredientes = get_ingredientes_receta(receta["id"])
 
                 if not ingredientes.empty:
-                    st.dataframe(
-                        ingredientes[["insumo", "cantidad", "unidad"]],
-                        use_container_width=True,
-                        hide_index=True,
-                    )
+                    # Show each ingredient with a delete button
+                    for _, ing in ingredientes.iterrows():
+                        c1, c2 = st.columns([5, 1])
+                        c1.write(f"• {ing['insumo']} — {ing['cantidad']} {ing['unidad']}")
+                        if c2.button("🗑", key=f"del_ing_{ing['id']}"):
+                            delete_ingrediente_receta(ing["id"])
+                            st.rerun()
                 else:
                     st.caption("Sin ingredientes todavía.")
 
-                # Add ingredient form
-                insumos = get_insumos()
+                # Add ingredient to existing recipe
                 if not insumos.empty:
-                    with st.form(f"form_ing_{receta['id']}"):
-                        opciones = build_opciones(insumos)
-                        col1, col2 = st.columns([3, 1])
-                        insumo_label = col1.selectbox("Insumo", list(opciones.keys()), key=f"sel_{receta['id']}")
-                        cantidad_ing = col2.number_input("Cantidad", min_value=0.01, value=1.0, key=f"qty_{receta['id']}")
-                        add_ing = st.form_submit_button("Agregar ingrediente")
-                    if add_ing:
-                        add_ingrediente_receta(receta["id"], opciones[insumo_label], cantidad_ing)
-                        st.success("Ingrediente agregado.")
+                    st.markdown("**Agregar ingrediente:**")
+                    opciones = build_opciones(insumos)
+                    col1, col2, col3 = st.columns([3, 1, 1])
+                    ing_label = col1.selectbox("Insumo", list(opciones.keys()), key=f"edit_ing_{receta['id']}")
+                    ing_qty = col2.number_input("Cantidad", min_value=0.01, value=1.0, key=f"edit_qty_{receta['id']}")
+                    if col3.button("➕ Añadir", key=f"edit_add_{receta['id']}"):
+                        add_ingrediente_receta(receta["id"], opciones[ing_label], ing_qty)
                         st.rerun()
-                else:
-                    st.caption("Cargá insumos primero para agregar ingredientes.")
 
-
+# -----------------------
+# Movimientos (historial + formularios)
+# -----------------------
+elif menu == "Movimientos":
 
     # --- Formulario: Registrar consumo por receta ---
     if st.session_state.mostrar_form_consumo:
