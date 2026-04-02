@@ -21,17 +21,20 @@ if "mostrar_form_salida" not in st.session_state:
     st.session_state.mostrar_form_salida = False
 
 # -----------------------
+# -----------------------
 # Botones de barra lateral
 # -----------------------
 st.sidebar.subheader("Opciones")
 if st.sidebar.button("Nuevo insumo"):
     st.session_state.menu = "Insumos"
     st.session_state.mostrar_form_insumo = True
-if st.sidebar.button("Nuevo movimiento"):
-    st.session_state.menu = "Registrar compra"
-    st.session_state.mostrar_form_compra = True
-    st.session_state.mostrar_form_salida = True  # opcional: desbloquear salida también
 
+if st.sidebar.button("Nuevo movimiento"):
+    # Cambiar a "Registrar compra" automáticamente
+    st.session_state.menu = "Registrar compra"
+    # Desbloquear formularios de compra y salida
+    st.session_state.mostrar_form_compra = True
+    st.session_state.mostrar_form_salida = True
 # -----------------------
 # Menú principal
 # -----------------------
@@ -112,6 +115,7 @@ elif menu == "Registrar compra":
     if insumos.empty:
         st.info("Primero debes cargar insumos.")
     else:
+        # Mostrar formulario solo si el estado es True
         if st.session_state.mostrar_form_compra:
             opciones = {f"{row['nombre']} ({row['unidad']})": row["id"] for _, row in insumos.iterrows()}
             insumo_label = st.selectbox("Selecciona un insumo", list(opciones.keys()))
@@ -122,7 +126,7 @@ elif menu == "Registrar compra":
                 try:
                     registrar_movimiento("compra", opciones[insumo_label], cantidad, motivo)
                     st.success("Compra registrada correctamente.")
-                    st.session_state.mostrar_form_compra = False
+                    st.session_state.mostrar_form_compra = False  # ocultar formulario después de registrar
                 except Exception as e:
                     st.error(str(e))
 
@@ -149,7 +153,6 @@ elif menu == "Registrar salida/merma":
                     st.session_state.mostrar_form_salida = False
                 except Exception as e:
                     st.error(str(e))
-
 # -----------------------
 # Movimientos
 # -----------------------
