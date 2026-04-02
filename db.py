@@ -1,7 +1,7 @@
 import pandas as pd
 from supabase import create_client, Client
 from datetime import datetime, timezone
-import streamlit as st  # solo usado dentro de funciones
+import streamlit as st
 
 # -----------------------
 # Conexión a Supabase cacheada
@@ -14,7 +14,7 @@ def get_supabase() -> Client:
 
 
 # -----------------------
-# Funciones de manejo de insumos
+# Funciones de insumos
 # -----------------------
 def get_insumos():
     supabase = get_supabase()
@@ -53,7 +53,9 @@ def get_movimientos():
 
     rows = []
     for row in data:
-        nombre_insumo = row["insumos"]["nombre"] if row.get("insumos") else None
+        insumos_rel = row.get("insumos")
+        # Warn if the join returned nothing — could indicate a broken FK
+        nombre_insumo = insumos_rel["nombre"] if insumos_rel else "—"
         rows.append({
             "id": row["id"],
             "fecha": row["fecha"],
@@ -61,18 +63,26 @@ def get_movimientos():
             "insumo": nombre_insumo,
             "cantidad": row["cantidad"],
             "motivo": row["motivo"],
-            "usuario": row["usuario"]
+            "usuario": row["usuario"],
         })
     return pd.DataFrame(rows)
 
 
 def registrar_movimiento(tipo, insumo_id, cantidad, motivo="", usuario="admin"):
+    # TODO: replace hardcoded "admin" with the authenticated user once auth is added
     supabase = get_supabase()
 
-    insumo_resp = supabase.table("insumos").select("*").eq("id", insumo_id).single().execute()
+    # Fetch only the field we need
+    insumo_resp = (
+        supabase.table("insumos")
+        .select("stock_actual")
+        .eq("id", insumo_id)
+        .single()
+        .execute()
+    )
     insumo = insumo_resp.data
     if not insumo:
-        raise Exception("Insumo no encontrado")
+        raise ValueError("Insumo no encontrado")
 
     stock_actual = float(insumo["stock_actual"])
     cantidad = float(cantidad)
@@ -81,18 +91,20 @@ def registrar_movimiento(tipo, insumo_id, cantidad, motivo="", usuario="admin"):
         nuevo_stock = stock_actual + cantidad
     else:
         if cantidad > stock_actual:
-            raise Exception("No puedes descontar más stock del disponible")
+            raise ValueError("No puedes descontar más stock del disponible")
         nuevo_stock = stock_actual - cantidad
 
+    # Insert movement first — if this fails, stock is untouched
     supabase.table("movimientos").insert({
         "fecha": datetime.now(timezone.utc).isoformat(),
         "tipo": tipo,
         "insumo_id": insumo_id,
         "cantidad": cantidad,
         "motivo": motivo,
-        "usuario": usuario
+        "usuario": usuario,
     }).execute()
 
+    # Only update stock after the movement is safely recorded
     supabase.table("insumos").update({
         "stock_actual": nuevo_stock
     }).eq("id", insumo_id).execute()

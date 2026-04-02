@@ -9,37 +9,44 @@ st.set_page_config(page_title="Control de Stock - Tavoli", layout="wide")
 # -----------------------
 # Inicialización de session_state
 # -----------------------
-if "menu" not in st.session_state:
-    st.session_state.menu = "Dashboard"
-
-# Formularios visibles
-for key in ["mostrar_form_insumo", "mostrar_form_compra", "mostrar_form_salida",
-            "nuevo_movimiento_activo", "nuevo_movimiento_tipo"]:
+_defaults = {
+    "menu": "Dashboard",
+    "mostrar_form_insumo": False,
+    "mostrar_form_compra": False,
+    "mostrar_form_salida": False,
+    "nuevo_movimiento_activo": False,
+    "nuevo_movimiento_tipo": "Compra",
+}
+for key, val in _defaults.items():
     if key not in st.session_state:
-        st.session_state[key] = False if "mostrar" in key or "activo" in key else "Compra"
+        st.session_state[key] = val
+
+# -----------------------
+# Helper: selectbox de insumos
+# -----------------------
+def build_opciones(insumos):
+    """Returns a dict {label: id} for use in selectboxes."""
+    return {f"{row['nombre']} ({row['unidad']})": row["id"] for _, row in insumos.iterrows()}
 
 # -----------------------
 # Botones de barra lateral
 # -----------------------
 st.sidebar.subheader("Opciones")
 
-# Nuevo insumo
 if st.sidebar.button("Nuevo insumo"):
     st.session_state.menu = "Insumos"
     st.session_state.mostrar_form_insumo = True
 
-# Nuevo movimiento
 if st.sidebar.button("Nuevo movimiento"):
     st.session_state.nuevo_movimiento_activo = True
-    st.session_state.nuevo_movimiento_tipo = "Compra"  # valor inicial
+    st.session_state.nuevo_movimiento_tipo = "Compra"
 
-# Radio de tipo de movimiento (solo si el flujo está activo)
 if st.session_state.nuevo_movimiento_activo:
     tipo = st.sidebar.radio(
         "Tipo de nuevo movimiento",
         ["Compra", "Salida/Merma"],
         index=["Compra", "Salida/Merma"].index(st.session_state.nuevo_movimiento_tipo),
-        key="nuevo_movimiento_tipo_radio"
+        key="nuevo_movimiento_tipo_radio",
     )
     st.session_state.nuevo_movimiento_tipo = tipo
     if tipo == "Compra":
@@ -52,7 +59,7 @@ if st.session_state.nuevo_movimiento_activo:
         st.session_state.mostrar_form_compra = False
 
 # -----------------------
-# Menú principal con radio
+# Menú principal
 # -----------------------
 menu_options = ["Dashboard", "Insumos", "Registrar compra", "Registrar salida/merma", "Movimientos"]
 menu = st.sidebar.radio("Navegación", menu_options, index=menu_options.index(st.session_state.menu))
@@ -76,7 +83,7 @@ if menu == "Dashboard":
         st.subheader("Stock actual")
         st.dataframe(
             insumos[["nombre", "categoria", "unidad", "stock_actual", "stock_minimo", "costo_unitario"]],
-            use_container_width=True
+            use_container_width=True,
         )
 
         st.subheader("Alertas")
@@ -87,7 +94,7 @@ if menu == "Dashboard":
             st.warning("Hay insumos por debajo del stock mínimo:")
             st.dataframe(
                 alertas[["nombre", "stock_actual", "stock_minimo", "unidad"]],
-                use_container_width=True
+                use_container_width=True,
             )
 
 # -----------------------
@@ -128,21 +135,20 @@ elif menu == "Registrar compra":
     insumos = get_insumos()
     if insumos.empty:
         st.info("Primero debes cargar insumos.")
-    else:
-        if st.session_state.mostrar_form_compra:
-            opciones = {f"{row['nombre']} ({row['unidad']})": row["id"] for _, row in insumos.iterrows()}
-            insumo_label = st.selectbox("Selecciona un insumo", list(opciones.keys()))
-            cantidad = st.number_input("Cantidad comprada", min_value=0.01, value=1.0)
-            motivo = st.text_input("Proveedor / detalle")
+    elif st.session_state.mostrar_form_compra:
+        opciones = build_opciones(insumos)
+        insumo_label = st.selectbox("Selecciona un insumo", list(opciones.keys()))
+        cantidad = st.number_input("Cantidad comprada", min_value=0.01, value=1.0)
+        motivo = st.text_input("Proveedor / detalle")
 
-            if st.button("Registrar compra"):
-                try:
-                    registrar_movimiento("compra", opciones[insumo_label], cantidad, motivo)
-                    st.success("Compra registrada correctamente.")
-                    st.session_state.mostrar_form_compra = False
-                    st.session_state.nuevo_movimiento_activo = False
-                except Exception as e:
-                    st.error(str(e))
+        if st.button("Registrar compra"):
+            try:
+                registrar_movimiento("compra", opciones[insumo_label], cantidad, motivo)
+                st.success("Compra registrada correctamente.")
+                st.session_state.mostrar_form_compra = False
+                st.session_state.nuevo_movimiento_activo = False
+            except Exception as e:
+                st.error(str(e))
 
 # -----------------------
 # Registrar Salida / Merma
@@ -152,22 +158,21 @@ elif menu == "Registrar salida/merma":
     insumos = get_insumos()
     if insumos.empty:
         st.info("Primero debes cargar insumos.")
-    else:
-        if st.session_state.mostrar_form_salida:
-            opciones = {f"{row['nombre']} ({row['unidad']})": row["id"] for _, row in insumos.iterrows()}
-            tipo = st.selectbox("Tipo de salida", ["merma", "consumo", "ajuste"])
-            insumo_label = st.selectbox("Selecciona un insumo", list(opciones.keys()))
-            cantidad = st.number_input("Cantidad a descontar", min_value=0.01, value=1.0)
-            motivo = st.text_input("Motivo")
+    elif st.session_state.mostrar_form_salida:
+        opciones = build_opciones(insumos)
+        tipo = st.selectbox("Tipo de salida", ["merma", "consumo", "ajuste"])
+        insumo_label = st.selectbox("Selecciona un insumo", list(opciones.keys()))
+        cantidad = st.number_input("Cantidad a descontar", min_value=0.01, value=1.0)
+        motivo = st.text_input("Motivo")
 
-            if st.button("Registrar salida"):
-                try:
-                    registrar_movimiento(tipo, opciones[insumo_label], cantidad, motivo)
-                    st.success("Salida registrada correctamente.")
-                    st.session_state.mostrar_form_salida = False
-                    st.session_state.nuevo_movimiento_activo = False
-                except Exception as e:
-                    st.error(str(e))
+        if st.button("Registrar salida"):
+            try:
+                registrar_movimiento(tipo, opciones[insumo_label], cantidad, motivo)
+                st.success("Salida registrada correctamente.")
+                st.session_state.mostrar_form_salida = False
+                st.session_state.nuevo_movimiento_activo = False
+            except Exception as e:
+                st.error(str(e))
 
 # -----------------------
 # Movimientos
