@@ -68,6 +68,117 @@ def get_movimientos():
     return pd.DataFrame(rows)
 
 
+# -----------------------
+# Funciones de recetas
+# -----------------------
+def get_recetas():
+    supabase = get_supabase()
+    response = supabase.table("recetas").select("*").order("nombre").execute()
+    data = response.data if response.data else []
+    return pd.DataFrame(data)
+
+
+def add_receta(nombre):
+    supabase = get_supabase()
+    response = supabase.table("recetas").insert({"nombre": nombre}).execute()
+    return response.data[0]["id"]
+
+
+def get_ingredientes_receta(receta_id):
+    """Returns ingredients for a recipe joined with insumo name and unit."""
+    supabase = get_supabase()
+    response = (
+        supabase.table("receta_ingredientes")
+        .select("id, cantidad, insumo_id, insumos(nombre, unidad)")
+        .eq("receta_id", receta_id)
+        .execute()
+    )
+    data = response.data if response.data else []
+    rows = []
+    for row in data:
+        insumo = row.get("insumos") or {}
+        rows.append({
+            "id": row["id"],
+            "insumo_id": row["insumo_id"],
+            "insumo": insumo.get("nombre", "—"),
+            "unidad": insumo.get("unidad", ""),
+            "cantidad": row["cantidad"],
+        })
+    return pd.DataFrame(rows)
+
+
+def add_ingrediente_receta(receta_id, insumo_id, cantidad):
+    supabase = get_supabase()
+    supabase.table("receta_ingredientes").insert({
+        "receta_id": receta_id,
+        "insumo_id": insumo_id,
+        "cantidad": float(cantidad),
+    }).execute()
+
+
+def delete_ingrediente_receta(ingrediente_id):
+    supabase = get_supabase()
+    supabase.table("receta_ingredientes").delete().eq("id", ingrediente_id).execute()
+
+
+def registrar_consumo_receta(receta_id, cantidad_vendida, motivo="", usuario="admin"):
+    """
+    Deducts stock for all ingredients of a recipe multiplied by cantidad_vendida.
+    Raises ValueError if any ingredient has insufficient stock before making any changes.
+    """
+    supabase = get_supabase()
+    ingredientes = get_ingredientes_receta(receta_id)
+    if ingredientes.empty:
+        raise ValueError("La receta no tiene ingredientes cargados.")
+
+    cantidad_vendida = float(cantidad_vendida)
+
+    # --- Pre-flight check: verify all ingredients have enough stock ---
+    errores = []
+    for _, ing in ingredientes.iterrows():
+        resp = (
+            supabase.table("insumos")
+            .select("nombre, stock_actual")
+            .eq("id", ing["insumo_id"])
+            .single()
+            .execute()
+        )
+        insumo = resp.data
+        if not insumo:
+            errores.append(f"Insumo ID {ing['insumo_id']} no encontrado.")
+            continue
+        necesario = ing["cantidad"] * cantidad_vendida
+        if necesario > float(insumo["stock_actual"]):
+            errores.append(
+                f"{insumo['nombre']}: necesitás {necesario} {ing['unidad']}, "
+                f"hay {insumo['stock_actual']} {ing['unidad']}."
+            )
+    if errores:
+        raise ValueError("Stock insuficiente:\n" + "\n".join(errores))
+
+    # --- All good: register movements and deduct stock ---
+    fecha = datetime.now(timezone.utc).isoformat()
+    for _, ing in ingredientes.iterrows():
+        total = ing["cantidad"] * cantidad_vendida
+        supabase.table("movimientos").insert({
+            "fecha": fecha,
+            "tipo": "consumo",
+            "insumo_id": ing["insumo_id"],
+            "cantidad": total,
+            "motivo": motivo,
+            "usuario": usuario,
+        }).execute()
+        resp = (
+            supabase.table("insumos")
+            .select("stock_actual")
+            .eq("id", ing["insumo_id"])
+            .single()
+            .execute()
+        )
+        nuevo_stock = float(resp.data["stock_actual"]) - total
+        supabase.table("insumos").update({"stock_actual": nuevo_stock}).eq("id", ing["insumo_id"]).execute()
+
+
 def registrar_movimiento(tipo, insumo_id, cantidad, motivo="", usuario="admin"):
     # TODO: replace hardcoded "admin" with the authenticated user once auth is added
     supabase = get_supabase()

@@ -1,5 +1,9 @@
 import streamlit as st
-from db import get_insumos, add_insumo, registrar_movimiento, get_movimientos
+from db import (
+    get_insumos, add_insumo, registrar_movimiento, get_movimientos,
+    get_recetas, add_receta, get_ingredientes_receta,
+    add_ingrediente_receta, delete_ingrediente_receta, registrar_consumo_receta,
+)
 
 # -----------------------
 # Configuración de la página
@@ -13,6 +17,8 @@ _defaults = {
     "mostrar_form_insumo": False,
     "mostrar_form_compra": False,
     "mostrar_form_salida": False,
+    "mostrar_form_consumo": False,
+    "mostrar_form_receta": False,
     "_last_menu": None,
 }
 for key, val in _defaults.items():
@@ -39,18 +45,30 @@ if st.sidebar.button("📦 Registrar compra"):
     st.session_state["menu"] = "Movimientos"
     st.session_state.mostrar_form_compra = True
     st.session_state.mostrar_form_salida = False
+    st.session_state.mostrar_form_consumo = False
 
 if st.sidebar.button("📤 Registrar salida/merma"):
     st.session_state["menu"] = "Movimientos"
     st.session_state.mostrar_form_salida = True
     st.session_state.mostrar_form_compra = False
+    st.session_state.mostrar_form_consumo = False
+
+if st.sidebar.button("☕ Registrar consumo"):
+    st.session_state["menu"] = "Movimientos"
+    st.session_state.mostrar_form_consumo = True
+    st.session_state.mostrar_form_compra = False
+    st.session_state.mostrar_form_salida = False
+
+if st.sidebar.button("📋 Nueva receta"):
+    st.session_state["menu"] = "Recetas"
+    st.session_state.mostrar_form_receta = True
 
 st.sidebar.divider()
 
 # -----------------------
 # Menú principal (sin las páginas de registro)
 # -----------------------
-menu_options = ["Dashboard", "Insumos", "Movimientos"]
+menu_options = ["Dashboard", "Insumos", "Recetas", "Movimientos"]
 
 menu = st.sidebar.radio(
     "Navegación",
@@ -63,6 +81,8 @@ if menu != st.session_state.get("_last_menu"):
     st.session_state.mostrar_form_insumo = False
     st.session_state.mostrar_form_compra = False
     st.session_state.mostrar_form_salida = False
+    st.session_state.mostrar_form_consumo = False
+    st.session_state.mostrar_form_receta = False
 st.session_state["_last_menu"] = menu
 
 # -----------------------
@@ -130,9 +150,88 @@ elif menu == "Insumos":
         st.info("No hay insumos cargados.")
 
 # -----------------------
-# Movimientos (historial + formularios de compra/salida)
+# Recetas
 # -----------------------
-elif menu == "Movimientos":
+elif menu == "Recetas":
+    st.subheader("Gestión de recetas")
+
+    # --- Crear nueva receta ---
+    if st.session_state.mostrar_form_receta:
+        with st.form("form_nueva_receta"):
+            nombre_receta = st.text_input("Nombre de la receta")
+            submitted = st.form_submit_button("Crear receta")
+        if submitted:
+            if nombre_receta.strip():
+                add_receta(nombre_receta.strip())
+                st.success(f"Receta '{nombre_receta}' creada.")
+                st.session_state.mostrar_form_receta = False
+            else:
+                st.error("El nombre es obligatorio.")
+        st.divider()
+
+    # --- Listado de recetas con ingredientes ---
+    recetas = get_recetas()
+    if recetas.empty:
+        st.info("No hay recetas cargadas. Usá el botón '📋 Nueva receta' para crear una.")
+    else:
+        for _, receta in recetas.iterrows():
+            with st.expander(f"**{receta['nombre']}**", expanded=False):
+                ingredientes = get_ingredientes_receta(receta["id"])
+
+                if not ingredientes.empty:
+                    st.dataframe(
+                        ingredientes[["insumo", "cantidad", "unidad"]],
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+                else:
+                    st.caption("Sin ingredientes todavía.")
+
+                # Add ingredient form
+                insumos = get_insumos()
+                if not insumos.empty:
+                    with st.form(f"form_ing_{receta['id']}"):
+                        opciones = build_opciones(insumos)
+                        col1, col2 = st.columns([3, 1])
+                        insumo_label = col1.selectbox("Insumo", list(opciones.keys()), key=f"sel_{receta['id']}")
+                        cantidad_ing = col2.number_input("Cantidad", min_value=0.01, value=1.0, key=f"qty_{receta['id']}")
+                        add_ing = st.form_submit_button("Agregar ingrediente")
+                    if add_ing:
+                        add_ingrediente_receta(receta["id"], opciones[insumo_label], cantidad_ing)
+                        st.success("Ingrediente agregado.")
+                        st.rerun()
+                else:
+                    st.caption("Cargá insumos primero para agregar ingredientes.")
+
+
+
+    # --- Formulario: Registrar consumo por receta ---
+    if st.session_state.mostrar_form_consumo:
+        st.subheader("Registrar consumo")
+        recetas = get_recetas()
+        if recetas.empty:
+            st.info("No hay recetas cargadas. Creá una en la sección Recetas.")
+        else:
+            with st.form("form_consumo"):
+                opciones_recetas = {row["nombre"]: row["id"] for _, row in recetas.iterrows()}
+                receta_label = st.selectbox("Receta", list(opciones_recetas.keys()))
+                cantidad_vendida = st.number_input("Cantidad vendida", min_value=1, value=1, step=1)
+                motivo = st.text_input("Nota (opcional)")
+                submitted = st.form_submit_button("Registrar consumo")
+
+            if submitted:
+                try:
+                    registrar_consumo_receta(
+                        opciones_recetas[receta_label],
+                        cantidad_vendida,
+                        motivo=motivo or receta_label,
+                    )
+                    st.success(f"Consumo de {cantidad_vendida}x {receta_label} registrado.")
+                    st.session_state.mostrar_form_consumo = False
+                except ValueError as e:
+                    st.error(str(e))
+
+        st.divider()
 
     # --- Formulario: Registrar compra ---
     if st.session_state.mostrar_form_compra:
