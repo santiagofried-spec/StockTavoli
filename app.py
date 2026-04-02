@@ -1,4 +1,5 @@
 import streamlit as st
+from db import get_insumos, add_insumo, registrar_movimiento, get_movimientos
 
 # -----------------------
 # Configuración de la página
@@ -6,31 +7,37 @@ import streamlit as st
 st.set_page_config(page_title="Control de Stock - Tavoli", layout="wide")
 
 # -----------------------
-# Ahora sí importamos funciones de DB
+# Inicialización del estado
 # -----------------------
-from db import get_insumos, add_insumo, registrar_movimiento, get_movimientos
-
-# -----------------------
-# Título
-# -----------------------
-st.title("☕ Control de Stock - Tavoli")
-
-# -----------------------
-# Estado para evitar duplicados
-# -----------------------
+if "menu" not in st.session_state:
+    st.session_state.menu = "Dashboard"
 if "insumo_agregado" not in st.session_state:
     st.session_state.insumo_agregado = False
 if "movimiento_registrado" not in st.session_state:
     st.session_state.movimiento_registrado = False
 
 # -----------------------
-# Menú lateral
+# Botones en la barra lateral
+# -----------------------
+if st.sidebar.button("Nuevo insumo"):
+    st.session_state.menu = "Insumos"
+    st.session_state.insumo_agregado = False
+    st.rerun()
+
+if st.sidebar.button("Nuevo movimiento"):
+    st.session_state.menu = "Registrar compra"  # o "Registrar salida/merma"
+    st.session_state.movimiento_registrado = False
+    st.rerun()
+
+# -----------------------
+# Menú principal
 # -----------------------
 menu = st.sidebar.radio(
     "Navegación",
     ["Dashboard", "Insumos", "Registrar compra", "Registrar salida/merma", "Movimientos"],
-    index=0 if "menu" not in st.session_state else ["Dashboard", "Insumos", "Registrar compra", "Registrar salida/merma", "Movimientos"].index(st.session_state.menu)
+    index=["Dashboard", "Insumos", "Registrar compra", "Registrar salida/merma", "Movimientos"].index(st.session_state.menu)
 )
+
 # -----------------------
 # Dashboard
 # -----------------------
@@ -64,7 +71,7 @@ if menu == "Dashboard":
             )
 
 # -----------------------
-# Sección Insumos
+# Gestión de Insumos
 # -----------------------
 elif menu == "Insumos":
     st.subheader("Gestión de insumos")
@@ -149,16 +156,3 @@ elif menu == "Movimientos":
         st.info("No hay movimientos registrados.")
     else:
         st.dataframe(movimientos, use_container_width=True)
-
-# -----------------------
-# Botones de reset en la barra lateral
-# -----------------------
-st.sidebar.subheader("Opciones")
-if st.sidebar.button("Nuevo insumo"):
-    st.session_state.insumo_agregado = False
-    st.rerun()
-
-if st.sidebar.button("Nuevo movimiento"):
-    st.session_state.movimiento_registrado = False
-    st.session_state.menu = "Registrar compra"  # o "Registrar salida/merma"
-    st.rerun()
