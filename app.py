@@ -12,46 +12,47 @@ st.set_page_config(page_title="Control de Stock - Tavoli", layout="wide")
 if "menu" not in st.session_state:
     st.session_state.menu = "Dashboard"
 
-# Formularios visibles o no
 for key in ["mostrar_form_insumo", "mostrar_form_compra", "mostrar_form_salida"]:
     if key not in st.session_state:
         st.session_state[key] = False
 
 # -----------------------
-# Función callback para radio menu
+# Callback para radio
 # -----------------------
 def cambiar_menu():
     st.session_state.menu = st.session_state.radio_menu
+    # Ocultar formularios al cambiar de sección
+    st.session_state.mostrar_form_insumo = False
+    st.session_state.mostrar_form_compra = False
+    st.session_state.mostrar_form_salida = False
 
 # -----------------------
 # Botones de barra lateral
 # -----------------------
 st.sidebar.subheader("Opciones")
-
 if st.sidebar.button("Nuevo insumo"):
     st.session_state.menu = "Insumos"
     st.session_state.mostrar_form_insumo = True
-    st.rerun()
 
 if st.sidebar.button("Nuevo movimiento"):
     st.session_state.menu = "Registrar compra"
     st.session_state.mostrar_form_compra = True
     st.session_state.mostrar_form_salida = True
-    st.rerun()
 
 # -----------------------
-# Menú principal con radio (sincronizado)
+# Radio menú sincronizado
 # -----------------------
 menu_opciones = ["Dashboard", "Insumos", "Registrar compra", "Registrar salida/merma", "Movimientos"]
 
 st.sidebar.radio(
     "Navegación",
     menu_opciones,
-    index=menu_opciones.index(st.session_state.get("menu", "Dashboard")),
+    index=menu_opciones.index(st.session_state.menu),
     key="radio_menu",
-    on_change=cambiar_menu  # callback para mantener session_state actualizado
+    on_change=cambiar_menu
 )
 
+# -----------------------
 # -----------------------
 # DASHBOARD
 # -----------------------
@@ -105,7 +106,6 @@ elif st.session_state.menu == "Insumos":
                 add_insumo(nombre, categoria, unidad, stock_actual, stock_minimo, costo_unitario, proveedor)
                 st.success(f"Insumo '{nombre}' agregado correctamente.")
                 st.session_state.mostrar_form_insumo = False
-                st.rerun()
             else:
                 st.error("El nombre es obligatorio.")
 
@@ -137,7 +137,6 @@ elif st.session_state.menu == "Registrar compra":
                     registrar_movimiento("compra", opciones[insumo_label], cantidad, motivo)
                     st.success("Compra registrada correctamente.")
                     st.session_state.mostrar_form_compra = False
-                    st.rerun()
                 except Exception as e:
                     st.error(str(e))
 
@@ -162,7 +161,6 @@ elif st.session_state.menu == "Registrar salida/merma":
                     registrar_movimiento(tipo, opciones[insumo_label], cantidad, motivo)
                     st.success("Salida registrada correctamente.")
                     st.session_state.mostrar_form_salida = False
-                    st.rerun()
                 except Exception as e:
                     st.error(str(e))
 
