@@ -1,15 +1,29 @@
 import streamlit as st
 from db import get_insumos, add_insumo, registrar_movimiento, get_movimientos
 
+# Configuración de la página
 st.set_page_config(page_title="Control de Stock - Tavoli", layout="wide")
-
 st.title("☕ Control de Stock - Tavoli")
 
+# -----------------------------
+# Estado para evitar duplicados
+# -----------------------------
+if "insumo_agregado" not in st.session_state:
+    st.session_state.insumo_agregado = False
+if "movimiento_registrado" not in st.session_state:
+    st.session_state.movimiento_registrado = False
+
+# -----------------------------
+# Menú lateral
+# -----------------------------
 menu = st.sidebar.radio(
     "Navegación",
     ["Dashboard", "Insumos", "Registrar compra", "Registrar salida/merma", "Movimientos"]
 )
 
+# -----------------------------
+# Dashboard
+# -----------------------------
 if menu == "Dashboard":
     st.subheader("Dashboard")
     insumos = get_insumos()
@@ -41,6 +55,9 @@ if menu == "Dashboard":
                 use_container_width=True
             )
 
+# -----------------------------
+# Sección Insumos
+# -----------------------------
 elif menu == "Insumos":
     st.subheader("Gestión de insumos")
 
@@ -52,17 +69,17 @@ elif menu == "Insumos":
         stock_minimo = st.number_input("Stock mínimo", min_value=0.0, value=0.0)
         costo_unitario = st.number_input("Costo unitario", min_value=0.0, value=0.0)
         proveedor = st.text_input("Proveedor")
-
         submitted = st.form_submit_button("Agregar insumo")
 
-        if submitted:
+        if submitted and not st.session_state.insumo_agregado:
             if nombre.strip():
                 add_insumo(nombre, categoria, unidad, stock_actual, stock_minimo, costo_unitario, proveedor)
-                st.success("Insumo agregado correctamente.")
-                st.rerun()
+                st.success(f"Insumo '{nombre}' agregado correctamente.")
+                st.session_state.insumo_agregado = True
             else:
                 st.error("El nombre es obligatorio.")
 
+    # Mostrar listado de insumos
     st.subheader("Listado de insumos")
     insumos = get_insumos()
     if not insumos.empty:
@@ -70,6 +87,9 @@ elif menu == "Insumos":
     else:
         st.info("No hay insumos cargados.")
 
+# -----------------------------
+# Registrar Compra
+# -----------------------------
 elif menu == "Registrar compra":
     st.subheader("Registrar compra")
     insumos = get_insumos()
@@ -85,14 +105,17 @@ elif menu == "Registrar compra":
             motivo = st.text_input("Proveedor / detalle")
             submitted = st.form_submit_button("Registrar compra")
 
-            if submitted:
+            if submitted and not st.session_state.movimiento_registrado:
                 try:
                     registrar_movimiento("compra", opciones[insumo_label], cantidad, motivo)
                     st.success("Compra registrada correctamente.")
-                    st.rerun()
+                    st.session_state.movimiento_registrado = True
                 except Exception as e:
                     st.error(str(e))
 
+# -----------------------------
+# Registrar Salida / Merma
+# -----------------------------
 elif menu == "Registrar salida/merma":
     st.subheader("Registrar salida / merma")
     insumos = get_insumos()
@@ -109,14 +132,17 @@ elif menu == "Registrar salida/merma":
             motivo = st.text_input("Motivo")
             submitted = st.form_submit_button("Registrar salida")
 
-            if submitted:
+            if submitted and not st.session_state.movimiento_registrado:
                 try:
                     registrar_movimiento(tipo, opciones[insumo_label], cantidad, motivo)
                     st.success("Salida registrada correctamente.")
-                    st.rerun()
+                    st.session_state.movimiento_registrado = True
                 except Exception as e:
                     st.error(str(e))
 
+# -----------------------------
+# Movimientos
+# -----------------------------
 elif menu == "Movimientos":
     st.subheader("Historial de movimientos")
     movimientos = get_movimientos()
@@ -125,3 +151,12 @@ elif menu == "Movimientos":
         st.info("No hay movimientos registrados.")
     else:
         st.dataframe(movimientos, use_container_width=True)
+
+# -----------------------------
+# Botones para resetear formulario
+# -----------------------------
+st.sidebar.subheader("Opciones")
+if st.sidebar.button("Nuevo insumo"):
+    st.session_state.insumo_agregado = False
+if st.sidebar.button("Nuevo movimiento"):
+    st.session_state.movimiento_registrado = False
