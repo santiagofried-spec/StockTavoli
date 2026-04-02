@@ -166,28 +166,31 @@ elif menu == "Recetas":
         st.markdown("#### Nueva receta")
         nombre_receta = st.text_input("Nombre de la receta", key="input_nombre_receta")
 
-        # Ingredient builder
+        # Ingredient builder — wrapped in a form so it only fires on explicit submit
         if not insumos.empty:
             opciones = build_opciones(insumos)
-            col1, col2, col3 = st.columns([3, 1, 1])
-            ing_label = col1.selectbox("Insumo", list(opciones.keys()), key="new_ing_label")
-            ing_cantidad = col2.number_input("Cantidad", min_value=0.01, value=1.0, key="new_ing_cantidad")
-            if col3.button("➕ Añadir", key="btn_add_ing"):
-                st.session_state.receta_ingredientes_temp.append({
-                    "insumo_id": opciones[ing_label],
-                    "label": ing_label,
-                    "cantidad": ing_cantidad,
-                })
+            with st.form("form_add_ing_new", clear_on_submit=True):
+                col1, col2, col3 = st.columns([3, 1, 1])
+                ing_label = col1.selectbox("Insumo", list(opciones.keys()))
+                ing_cantidad = col2.number_input("Cantidad", min_value=0.01, value=1.0)
+                if col3.form_submit_button("➕ Añadir"):
+                    st.session_state.receta_ingredientes_temp.append({
+                        "insumo_id": opciones[ing_label],
+                        "label": ing_label,
+                        "cantidad": ing_cantidad,
+                    })
 
         # Show accumulated ingredients
         if st.session_state.receta_ingredientes_temp:
             st.markdown("**Ingredientes agregados:**")
+            to_delete = None
             for i, ing in enumerate(st.session_state.receta_ingredientes_temp):
                 c1, c2 = st.columns([5, 1])
                 c1.write(f"• {ing['label']} — {ing['cantidad']}")
                 if c2.button("🗑", key=f"del_temp_{i}"):
-                    st.session_state.receta_ingredientes_temp.pop(i)
-                    st.rerun()
+                    to_delete = i
+            if to_delete is not None:
+                st.session_state.receta_ingredientes_temp.pop(to_delete)
         else:
             st.caption("Todavía no agregaste ingredientes.")
 
@@ -218,31 +221,41 @@ elif menu == "Recetas":
     if recetas.empty:
         st.info("No hay recetas cargadas. Usá el botón '📋 Nueva receta' para crear una.")
     else:
+        # Process any pending DB action BEFORE rendering, then clear it
+        accion = st.session_state.pop("_receta_accion", None)
+        if accion:
+            if accion["tipo"] == "add":
+                add_ingrediente_receta(accion["receta_id"], accion["insumo_id"], accion["cantidad"])
+            elif accion["tipo"] == "delete":
+                delete_ingrediente_receta(accion["ing_id"])
+
         for _, receta in recetas.iterrows():
             with st.expander(f"**{receta['nombre']}**", expanded=False):
                 ingredientes = get_ingredientes_receta(receta["id"])
 
                 if not ingredientes.empty:
-                    # Show each ingredient with a delete button
                     for _, ing in ingredientes.iterrows():
                         c1, c2 = st.columns([5, 1])
                         c1.write(f"• {ing['insumo']} — {ing['cantidad']} {ing['unidad']}")
                         if c2.button("🗑", key=f"del_ing_{ing['id']}"):
-                            delete_ingrediente_receta(ing["id"])
-                            st.rerun()
+                            st.session_state["_receta_accion"] = {"tipo": "delete", "ing_id": ing["id"]}
                 else:
                     st.caption("Sin ingredientes todavía.")
 
-                # Add ingredient to existing recipe
                 if not insumos.empty:
                     st.markdown("**Agregar ingrediente:**")
                     opciones = build_opciones(insumos)
-                    col1, col2, col3 = st.columns([3, 1, 1])
-                    ing_label = col1.selectbox("Insumo", list(opciones.keys()), key=f"edit_ing_{receta['id']}")
-                    ing_qty = col2.number_input("Cantidad", min_value=0.01, value=1.0, key=f"edit_qty_{receta['id']}")
-                    if col3.button("➕ Añadir", key=f"edit_add_{receta['id']}"):
-                        add_ingrediente_receta(receta["id"], opciones[ing_label], ing_qty)
-                        st.rerun()
+                    with st.form(f"form_add_ing_{receta['id']}", clear_on_submit=True):
+                        col1, col2, col3 = st.columns([3, 1, 1])
+                        ing_label = col1.selectbox("Insumo", list(opciones.keys()))
+                        ing_qty = col2.number_input("Cantidad", min_value=0.01, value=1.0)
+                        if col3.form_submit_button("➕ Añadir"):
+                            st.session_state["_receta_accion"] = {
+                                "tipo": "add",
+                                "receta_id": receta["id"],
+                                "insumo_id": opciones[ing_label],
+                                "cantidad": ing_qty,
+                            }
 
 # -----------------------
 # Movimientos (historial + formularios)
