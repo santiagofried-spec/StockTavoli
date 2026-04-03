@@ -14,6 +14,93 @@ def get_supabase() -> Client:
 
 
 # -----------------------
+# Auth
+# -----------------------
+def login(email, password):
+    """Returns (user, error_message)."""
+    supabase = get_supabase()
+    try:
+        resp = supabase.auth.sign_in_with_password({"email": email, "password": password})
+        return resp.user, None
+    except Exception as e:
+        return None, str(e)
+
+
+def logout():
+    supabase = get_supabase()
+    try:
+        supabase.auth.sign_out()
+    except Exception:
+        pass
+    for key in ["user", "role"]:
+        st.session_state.pop(key, None)
+
+
+def get_role(user_id):
+    """Returns 'admin', 'staff', or None."""
+    supabase = get_supabase()
+    try:
+        resp = (
+            supabase.table("user_roles")
+            .select("role")
+            .eq("user_id", user_id)
+            .single()
+            .execute()
+        )
+        return resp.data["role"] if resp.data else None
+    except Exception:
+        return None
+
+
+def create_user(email, password, role="staff"):
+    """Admin creates a new user. Returns (user, error_message)."""
+    supabase = get_supabase()
+    try:
+        resp = supabase.auth.admin.create_user({
+            "email": email,
+            "password": password,
+            "email_confirm": True,
+        })
+        user = resp.user
+        # Set role (trigger sets 'staff' by default, promote if needed)
+        if role == "admin":
+            supabase.table("user_roles").update({"role": "admin"}).eq("user_id", user.id).execute()
+        return user, None
+    except Exception as e:
+        return None, str(e)
+
+
+def get_users():
+    """Returns list of all users with their roles."""
+    supabase = get_supabase()
+    try:
+        users_resp = supabase.auth.admin.list_users()
+        roles_resp = supabase.table("user_roles").select("user_id, role").execute()
+        roles = {r["user_id"]: r["role"] for r in (roles_resp.data or [])}
+        rows = []
+        for u in users_resp:
+            rows.append({
+                "id": u.id,
+                "email": u.email,
+                "role": roles.get(u.id, "staff"),
+                "created_at": u.created_at,
+            })
+        return rows
+    except Exception:
+        return []
+
+
+def delete_user(user_id):
+    supabase = get_supabase()
+    supabase.auth.admin.delete_user(user_id)
+
+
+def update_user_role(user_id, role):
+    supabase = get_supabase()
+    supabase.table("user_roles").update({"role": role}).eq("user_id", user_id).execute()
+
+
+# -----------------------
 # Funciones de insumos
 # -----------------------
 def get_insumos():
@@ -38,37 +125,6 @@ def add_insumo(nombre, categoria, unidad, stock_actual, stock_minimo, costo_unit
 
 
 # -----------------------
-# Funciones de movimientos
-# -----------------------
-def get_movimientos():
-    supabase = get_supabase()
-    response = (
-        supabase
-        .table("movimientos")
-        .select("id, fecha, tipo, cantidad, motivo, usuario, insumo_id, insumos(nombre)")
-        .order("fecha", desc=True)
-        .execute()
-    )
-    data = response.data if response.data else []
-
-    rows = []
-    for row in data:
-        insumos_rel = row.get("insumos")
-        # Warn if the join returned nothing — could indicate a broken FK
-        nombre_insumo = insumos_rel["nombre"] if insumos_rel else "—"
-        rows.append({
-            "id": row["id"],
-            "fecha": row["fecha"],
-            "tipo": row["tipo"],
-            "insumo": nombre_insumo,
-            "cantidad": row["cantidad"],
-            "motivo": row["motivo"],
-            "usuario": row["usuario"],
-        })
-    return pd.DataFrame(rows)
-
-
-# -----------------------
 # Funciones de recetas
 # -----------------------
 def get_recetas():
@@ -85,7 +141,6 @@ def add_receta(nombre):
 
 
 def get_ingredientes_receta(receta_id):
-    """Returns ingredients for a recipe joined with insumo name and unit."""
     supabase = get_supabase()
     response = (
         supabase.table("receta_ingredientes")
@@ -122,10 +177,6 @@ def delete_ingrediente_receta(ingrediente_id):
 
 
 def registrar_consumo_receta(receta_id, cantidad_vendida, motivo="", usuario="admin"):
-    """
-    Deducts stock for all ingredients of a recipe multiplied by cantidad_vendida.
-    Raises ValueError if any ingredient has insufficient stock before making any changes.
-    """
     supabase = get_supabase()
     ingredientes = get_ingredientes_receta(receta_id)
     if ingredientes.empty:
@@ -133,7 +184,6 @@ def registrar_consumo_receta(receta_id, cantidad_vendida, motivo="", usuario="ad
 
     cantidad_vendida = float(cantidad_vendida)
 
-    # --- Pre-flight check: verify all ingredients have enough stock ---
     errores = []
     for _, ing in ingredientes.iterrows():
         resp = (
@@ -156,7 +206,6 @@ def registrar_consumo_receta(receta_id, cantidad_vendida, motivo="", usuario="ad
     if errores:
         raise ValueError("Stock insuficiente:\n" + "\n".join(errores))
 
-    # --- All good: register movements and deduct stock ---
     fecha = datetime.now(timezone.utc).isoformat()
     for _, ing in ingredientes.iterrows():
         total = ing["cantidad"] * cantidad_vendida
@@ -179,11 +228,40 @@ def registrar_consumo_receta(receta_id, cantidad_vendida, motivo="", usuario="ad
         supabase.table("insumos").update({"stock_actual": nuevo_stock}).eq("id", ing["insumo_id"]).execute()
 
 
+# -----------------------
+# Funciones de movimientos
+# -----------------------
+def get_movimientos():
+    supabase = get_supabase()
+    response = (
+        supabase
+        .table("movimientos")
+        .select("id, fecha, tipo, cantidad, motivo, usuario, insumo_id, insumos(nombre)")
+        .order("fecha", desc=True)
+        .execute()
+    )
+    data = response.data if response.data else []
+
+    rows = []
+    for row in data:
+        insumos_rel = row.get("insumos")
+        nombre_insumo = insumos_rel["nombre"] if insumos_rel else "—"
+        rows.append({
+            "id": row["id"],
+            "fecha": row["fecha"],
+            "tipo": row["tipo"],
+            "insumo": nombre_insumo,
+            "cantidad": row["cantidad"],
+            "motivo": row["motivo"],
+            "usuario": row["usuario"],
+        })
+    return pd.DataFrame(rows)
+
+
 def registrar_movimiento(tipo, insumo_id, cantidad, motivo="", usuario="admin"):
     # TODO: replace hardcoded "admin" with the authenticated user once auth is added
     supabase = get_supabase()
 
-    # Fetch only the field we need
     insumo_resp = (
         supabase.table("insumos")
         .select("stock_actual")
@@ -205,7 +283,6 @@ def registrar_movimiento(tipo, insumo_id, cantidad, motivo="", usuario="admin"):
             raise ValueError("No puedes descontar más stock del disponible")
         nuevo_stock = stock_actual - cantidad
 
-    # Insert movement first — if this fails, stock is untouched
     supabase.table("movimientos").insert({
         "fecha": datetime.now(timezone.utc).isoformat(),
         "tipo": tipo,
@@ -215,7 +292,6 @@ def registrar_movimiento(tipo, insumo_id, cantidad, motivo="", usuario="admin"):
         "usuario": usuario,
     }).execute()
 
-    # Only update stock after the movement is safely recorded
     supabase.table("insumos").update({
         "stock_actual": nuevo_stock
     }).eq("id", insumo_id).execute()

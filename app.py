@@ -3,12 +3,48 @@ from db import (
     get_insumos, add_insumo, registrar_movimiento, get_movimientos,
     get_recetas, add_receta, get_ingredientes_receta,
     add_ingrediente_receta, delete_ingrediente_receta, registrar_consumo_receta,
+    login, logout, get_role, create_user, get_users, delete_user, update_user_role,
 )
 
 # -----------------------
 # Configuración de la página
 # -----------------------
 st.set_page_config(page_title="Control de Stock - Tavoli", layout="wide")
+
+# -----------------------
+# Auth: login wall
+# -----------------------
+if "user" not in st.session_state:
+    st.session_state.user = None
+    st.session_state.role = None
+
+if st.session_state.user is None:
+    st.title("Control de Stock — Tavoli")
+    st.subheader("Iniciar sesión")
+    with st.form("form_login"):
+        email = st.text_input("Email")
+        password = st.text_input("Contraseña", type="password")
+        submitted = st.form_submit_button("Ingresar")
+    if submitted:
+        user, error = login(email, password)
+        if error:
+            st.error("Email o contraseña incorrectos.")
+        else:
+            role = get_role(user.id)
+            if not role:
+                st.error("Tu usuario no tiene un rol asignado. Contactá al administrador.")
+            else:
+                st.session_state.user = user
+                st.session_state.role = role
+                st.rerun()
+    st.stop()  # Nothing below renders if not logged in
+
+# -----------------------
+# Shortcuts
+# -----------------------
+is_admin = st.session_state.role == "admin"
+current_user_email = st.session_state.user.email
+current_user_id = st.session_state.user.id
 
 # -----------------------
 # Inicialización de session_state
@@ -19,6 +55,7 @@ _defaults = {
     "mostrar_form_salida": False,
     "mostrar_form_consumo": False,
     "mostrar_form_receta": False,
+    "mostrar_form_usuario": False,
     "_last_menu": None,
 }
 for key, val in _defaults.items():
@@ -26,63 +63,74 @@ for key, val in _defaults.items():
         st.session_state[key] = val
 
 # -----------------------
-# Helper: selectbox de insumos
+# Helper
 # -----------------------
 def build_opciones(insumos):
-    """Returns a dict {label: id} for use in selectboxes."""
     return {f"{row['nombre']} ({row['unidad']})": row["id"] for _, row in insumos.iterrows()}
 
 # -----------------------
-# Sidebar: botones de acción rápida
+# Sidebar
 # -----------------------
+st.sidebar.markdown(f"👤 **{current_user_email}**")
+st.sidebar.caption(f"Rol: {st.session_state.role}")
+if st.sidebar.button("Cerrar sesión"):
+    logout()
+    st.rerun()
+
+st.sidebar.divider()
 st.sidebar.subheader("Acciones rápidas")
 
-if st.sidebar.button("➕ Nuevo insumo"):
-    st.session_state["menu"] = "Insumos"
-    st.session_state.mostrar_form_insumo = True
-
-if st.sidebar.button("📦 Registrar compra"):
-    st.session_state["menu"] = "Movimientos"
-    st.session_state.mostrar_form_compra = True
-    st.session_state.mostrar_form_salida = False
-    st.session_state.mostrar_form_consumo = False
-
-if st.sidebar.button("📤 Registrar salida/merma"):
-    st.session_state["menu"] = "Movimientos"
-    st.session_state.mostrar_form_salida = True
-    st.session_state.mostrar_form_compra = False
-    st.session_state.mostrar_form_consumo = False
-
+# Staff can register consumo
 if st.sidebar.button("☕ Registrar consumo"):
     st.session_state["menu"] = "Movimientos"
     st.session_state.mostrar_form_consumo = True
     st.session_state.mostrar_form_compra = False
     st.session_state.mostrar_form_salida = False
 
-if st.sidebar.button("📋 Nueva receta"):
-    st.session_state["menu"] = "Recetas"
-    st.session_state.mostrar_form_receta = True
+# Admin-only actions
+if is_admin:
+    if st.sidebar.button("➕ Nuevo insumo"):
+        st.session_state["menu"] = "Insumos"
+        st.session_state.mostrar_form_insumo = True
+
+    if st.sidebar.button("📦 Registrar compra"):
+        st.session_state["menu"] = "Movimientos"
+        st.session_state.mostrar_form_compra = True
+        st.session_state.mostrar_form_salida = False
+        st.session_state.mostrar_form_consumo = False
+
+    if st.sidebar.button("📤 Registrar salida/merma"):
+        st.session_state["menu"] = "Movimientos"
+        st.session_state.mostrar_form_salida = True
+        st.session_state.mostrar_form_compra = False
+        st.session_state.mostrar_form_consumo = False
+
+    if st.sidebar.button("📋 Nueva receta"):
+        st.session_state["menu"] = "Recetas"
+        st.session_state.mostrar_form_receta = True
+
+    if st.sidebar.button("👤 Nuevo usuario"):
+        st.session_state["menu"] = "Usuarios"
+        st.session_state.mostrar_form_usuario = True
 
 st.sidebar.divider()
 
 # -----------------------
-# Menú principal (sin las páginas de registro)
+# Menú principal
 # -----------------------
-menu_options = ["Dashboard", "Insumos", "Recetas", "Movimientos"]
+menu_options = ["Dashboard", "Movimientos"]
+if is_admin:
+    menu_options = ["Dashboard", "Insumos", "Recetas", "Movimientos", "Usuarios"]
 
-menu = st.sidebar.radio(
-    "Navegación",
-    menu_options,
-    key="menu",
-)
+menu = st.sidebar.radio("Navegación", menu_options, key="menu")
 
-# When the user navigates via radio, clear any open forms
 if menu != st.session_state.get("_last_menu"):
     st.session_state.mostrar_form_insumo = False
     st.session_state.mostrar_form_compra = False
     st.session_state.mostrar_form_salida = False
     st.session_state.mostrar_form_consumo = False
     st.session_state.mostrar_form_receta = False
+    st.session_state.mostrar_form_usuario = False
 st.session_state["_last_menu"] = menu
 
 # -----------------------
@@ -100,11 +148,13 @@ if menu == "Dashboard":
         c1.metric("Cantidad de insumos", total_insumos)
         c2.metric("Insumos con stock bajo", stock_bajo)
 
+        # Staff don't see costs
+        cols_dashboard = ["nombre", "categoria", "unidad", "stock_actual", "stock_minimo"]
+        if is_admin:
+            cols_dashboard.append("costo_unitario")
+
         st.subheader("Stock actual")
-        st.dataframe(
-            insumos[["nombre", "categoria", "unidad", "stock_actual", "stock_minimo", "costo_unitario"]],
-            use_container_width=True,
-        )
+        st.dataframe(insumos[cols_dashboard], use_container_width=True)
 
         st.subheader("Alertas")
         alertas = insumos[insumos["stock_actual"] <= insumos["stock_minimo"]]
@@ -118,9 +168,13 @@ if menu == "Dashboard":
             )
 
 # -----------------------
-# Gestión de Insumos
+# Gestión de Insumos (admin only)
 # -----------------------
 elif menu == "Insumos":
+    if not is_admin:
+        st.error("Acceso restringido.")
+        st.stop()
+
     st.subheader("Gestión de insumos")
 
     if st.session_state.mostrar_form_insumo:
@@ -150,23 +204,23 @@ elif menu == "Insumos":
         st.info("No hay insumos cargados.")
 
 # -----------------------
-# Recetas
+# Recetas (admin only)
 # -----------------------
 elif menu == "Recetas":
+    if not is_admin:
+        st.error("Acceso restringido.")
+        st.stop()
+
     st.subheader("Gestión de recetas")
     insumos = get_insumos()
 
-    # --- Crear nueva receta ---
-    # Uses session_state to accumulate ingredients before saving,
-    # so no DB writes happen until the user clicks "Guardar receta".
     if st.session_state.mostrar_form_receta:
         if "receta_ingredientes_temp" not in st.session_state:
-            st.session_state.receta_ingredientes_temp = []  # list of {insumo_id, label, cantidad}
+            st.session_state.receta_ingredientes_temp = []
 
         st.markdown("#### Nueva receta")
         nombre_receta = st.text_input("Nombre de la receta", key="input_nombre_receta")
 
-        # Ingredient builder — wrapped in a form so it only fires on explicit submit
         if not insumos.empty:
             opciones = build_opciones(insumos)
             with st.form("form_add_ing_new", clear_on_submit=True):
@@ -180,7 +234,6 @@ elif menu == "Recetas":
                         "cantidad": ing_cantidad,
                     })
 
-        # Show accumulated ingredients
         if st.session_state.receta_ingredientes_temp:
             st.markdown("**Ingredientes agregados:**")
             to_delete = None
@@ -204,7 +257,7 @@ elif menu == "Recetas":
                 receta_id = add_receta(nombre_receta.strip())
                 for ing in st.session_state.receta_ingredientes_temp:
                     add_ingrediente_receta(receta_id, ing["insumo_id"], ing["cantidad"])
-                st.success(f"Receta '{nombre_receta}' guardada con {len(st.session_state.receta_ingredientes_temp)} ingrediente(s).")
+                st.success(f"Receta '{nombre_receta}' guardada.")
                 st.session_state.receta_ingredientes_temp = []
                 st.session_state.mostrar_form_receta = False
                 st.rerun()
@@ -216,12 +269,10 @@ elif menu == "Recetas":
 
         st.divider()
 
-    # --- Listado de recetas con edición de ingredientes ---
     recetas = get_recetas()
     if recetas.empty:
         st.info("No hay recetas cargadas. Usá el botón '📋 Nueva receta' para crear una.")
     else:
-        # Process any pending DB action BEFORE rendering, then clear it
         accion = st.session_state.pop("_receta_accion", None)
         if accion:
             if accion["tipo"] == "add":
@@ -258,16 +309,16 @@ elif menu == "Recetas":
                             }
 
 # -----------------------
-# Movimientos (historial + formularios)
+# Movimientos
 # -----------------------
 elif menu == "Movimientos":
 
-    # --- Formulario: Registrar consumo por receta ---
+    # Consumo — available to all roles
     if st.session_state.mostrar_form_consumo:
         st.subheader("Registrar consumo")
         recetas = get_recetas()
         if recetas.empty:
-            st.info("No hay recetas cargadas. Creá una en la sección Recetas.")
+            st.info("No hay recetas cargadas. Pedile al administrador que cree una.")
         else:
             with st.form("form_consumo"):
                 opciones_recetas = {row["nombre"]: row["id"] for _, row in recetas.iterrows()}
@@ -282,16 +333,16 @@ elif menu == "Movimientos":
                         opciones_recetas[receta_label],
                         cantidad_vendida,
                         motivo=motivo or receta_label,
+                        usuario=current_user_email,
                     )
                     st.success(f"Consumo de {cantidad_vendida}x {receta_label} registrado.")
                     st.session_state.mostrar_form_consumo = False
                 except ValueError as e:
                     st.error(str(e))
-
         st.divider()
 
-    # --- Formulario: Registrar compra ---
-    if st.session_state.mostrar_form_compra:
+    # Compra — admin only
+    if is_admin and st.session_state.mostrar_form_compra:
         st.subheader("Registrar compra")
         insumos = get_insumos()
         if insumos.empty:
@@ -306,16 +357,15 @@ elif menu == "Movimientos":
 
             if submitted:
                 try:
-                    registrar_movimiento("compra", opciones[insumo_label], cantidad, motivo)
+                    registrar_movimiento("compra", opciones[insumo_label], cantidad, motivo, usuario=current_user_email)
                     st.success("Compra registrada correctamente.")
                     st.session_state.mostrar_form_compra = False
                 except Exception as e:
                     st.error(str(e))
-
         st.divider()
 
-    # --- Formulario: Registrar salida/merma ---
-    if st.session_state.mostrar_form_salida:
+    # Salida/merma — admin only
+    if is_admin and st.session_state.mostrar_form_salida:
         st.subheader("Registrar salida / merma")
         insumos = get_insumos()
         if insumos.empty:
@@ -331,18 +381,66 @@ elif menu == "Movimientos":
 
             if submitted:
                 try:
-                    registrar_movimiento(tipo, opciones[insumo_label], cantidad, motivo)
+                    registrar_movimiento(tipo, opciones[insumo_label], cantidad, motivo, usuario=current_user_email)
                     st.success("Salida registrada correctamente.")
                     st.session_state.mostrar_form_salida = False
                 except Exception as e:
                     st.error(str(e))
-
         st.divider()
 
-    # --- Historial ---
     st.subheader("Historial de movimientos")
     movimientos = get_movimientos()
     if movimientos.empty:
         st.info("No hay movimientos registrados.")
     else:
         st.dataframe(movimientos, use_container_width=True)
+
+# -----------------------
+# Usuarios (admin only)
+# -----------------------
+elif menu == "Usuarios":
+    if not is_admin:
+        st.error("Acceso restringido.")
+        st.stop()
+
+    st.subheader("Gestión de usuarios")
+
+    if st.session_state.mostrar_form_usuario:
+        with st.form("form_nuevo_usuario"):
+            new_email = st.text_input("Email")
+            new_password = st.text_input("Contraseña", type="password")
+            new_role = st.selectbox("Rol", ["staff", "admin"])
+            submitted = st.form_submit_button("Crear usuario")
+
+        if submitted:
+            if new_email.strip() and new_password.strip():
+                user, error = create_user(new_email.strip(), new_password.strip(), new_role)
+                if error:
+                    st.error(f"Error: {error}")
+                else:
+                    st.success(f"Usuario '{new_email}' creado como {new_role}.")
+                    st.session_state.mostrar_form_usuario = False
+            else:
+                st.error("Email y contraseña son obligatorios.")
+        st.divider()
+
+    users = get_users()
+    if not users:
+        st.info("No se pudieron cargar los usuarios.")
+    else:
+        st.markdown(f"**{len(users)} usuario(s) registrado(s)**")
+        for u in users:
+            c1, c2, c3, c4 = st.columns([3, 1, 1, 1])
+            c1.write(u["email"])
+            c2.write(u["role"])
+            # Role toggle
+            new_role = "admin" if u["role"] == "staff" else "staff"
+            if u["id"] != current_user_id:  # can't change own role
+                if c3.button(f"→ {new_role}", key=f"role_{u['id']}"):
+                    update_user_role(u["id"], new_role)
+                    st.rerun()
+                if c4.button("🗑 Eliminar", key=f"del_user_{u['id']}"):
+                    delete_user(u["id"])
+                    st.rerun()
+            else:
+                c3.caption("(vos)")
