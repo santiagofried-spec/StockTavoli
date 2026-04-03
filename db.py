@@ -70,9 +70,11 @@ def create_user(email, password, role="staff"):
             "email_confirm": True,
         })
         user = resp.user
-        # Set role (trigger sets 'staff' by default, promote if needed)
-        if role == "admin":
-            supabase.table("user_roles").update({"role": "admin"}).eq("user_id", user.id).execute()
+        # Insert role directly — no trigger needed
+        supabase.table("user_roles").insert({
+            "user_id": user.id,
+            "role": role,
+        }).execute()
         return user, None
     except Exception as e:
         return None, str(e)
