@@ -13,6 +13,14 @@ def get_supabase() -> Client:
     return create_client(url, key)
 
 
+@st.cache_resource
+def get_supabase_admin() -> Client:
+    """Service role client — only for admin auth operations (create/delete users)."""
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_SERVICE_KEY"]
+    return create_client(url, key)
+
+
 # -----------------------
 # Auth
 # -----------------------
@@ -54,7 +62,7 @@ def get_role(user_id):
 
 def create_user(email, password, role="staff"):
     """Admin creates a new user. Returns (user, error_message)."""
-    supabase = get_supabase()
+    supabase = get_supabase_admin()
     try:
         resp = supabase.auth.admin.create_user({
             "email": email,
@@ -72,7 +80,7 @@ def create_user(email, password, role="staff"):
 
 def get_users():
     """Returns list of all users with their roles."""
-    supabase = get_supabase()
+    supabase = get_supabase_admin()
     try:
         users_resp = supabase.auth.admin.list_users()
         roles_resp = supabase.table("user_roles").select("user_id, role").execute()
@@ -91,7 +99,7 @@ def get_users():
 
 
 def delete_user(user_id):
-    supabase = get_supabase()
+    supabase = get_supabase_admin()
     supabase.auth.admin.delete_user(user_id)
 
 
