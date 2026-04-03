@@ -243,6 +243,8 @@ def registrar_consumo_receta(receta_id, cantidad_vendida, motivo="", usuario=Non
 # -----------------------
 def get_movimientos():
     supabase = get_supabase()
+    admin = get_supabase_admin()
+
     response = (
         supabase
         .table("movimientos")
@@ -252,10 +254,19 @@ def get_movimientos():
     )
     data = response.data if response.data else []
 
+    # Build a UUID -> email map from auth users
+    try:
+        auth_users = admin.auth.admin.list_users()
+        user_map = {u.id: u.email for u in auth_users}
+    except Exception:
+        user_map = {}
+
     rows = []
     for row in data:
         insumos_rel = row.get("insumos")
         nombre_insumo = insumos_rel["nombre"] if insumos_rel else "—"
+        usuario_id = row.get("usuario")
+        usuario_email = user_map.get(str(usuario_id), "—") if usuario_id else "—"
         rows.append({
             "id": row["id"],
             "fecha": row["fecha"],
@@ -263,7 +274,7 @@ def get_movimientos():
             "insumo": nombre_insumo,
             "cantidad": row["cantidad"],
             "motivo": row["motivo"],
-            "usuario": row["usuario"],
+            "usuario": usuario_email,
         })
     return pd.DataFrame(rows)
 
