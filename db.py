@@ -186,7 +186,7 @@ def delete_ingrediente_receta(ingrediente_id):
     supabase.table("receta_ingredientes").delete().eq("id", ingrediente_id).execute()
 
 
-def registrar_consumo_receta(receta_id, cantidad_vendida, motivo="", usuario="admin"):
+def registrar_consumo_receta(receta_id, cantidad_vendida, motivo="", usuario=None):
     supabase = get_supabase()
     ingredientes = get_ingredientes_receta(receta_id)
     if ingredientes.empty:
@@ -268,7 +268,7 @@ def get_movimientos():
     return pd.DataFrame(rows)
 
 
-def registrar_movimiento(tipo, insumo_id, cantidad, motivo="", usuario="admin"):
+def registrar_movimiento(tipo, insumo_id, cantidad, motivo="", usuario=None):
     # TODO: replace hardcoded "admin" with the authenticated user once auth is added
     supabase = get_supabase()
 

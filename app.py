@@ -333,7 +333,7 @@ elif menu == "Movimientos":
                         opciones_recetas[receta_label],
                         cantidad_vendida,
                         motivo=motivo or receta_label,
-                        usuario=current_user_email,
+                        usuario=current_user_id,
                     )
                     st.success(f"Consumo de {cantidad_vendida}x {receta_label} registrado.")
                     st.session_state.mostrar_form_consumo = False
@@ -357,7 +357,7 @@ elif menu == "Movimientos":
 
             if submitted:
                 try:
-                    registrar_movimiento("compra", opciones[insumo_label], cantidad, motivo, usuario=current_user_email)
+                    registrar_movimiento("compra", opciones[insumo_label], cantidad, motivo, usuario=current_user_id)
                     st.success("Compra registrada correctamente.")
                     st.session_state.mostrar_form_compra = False
                 except Exception as e:
@@ -381,7 +381,7 @@ elif menu == "Movimientos":
 
             if submitted:
                 try:
-                    registrar_movimiento(tipo, opciones[insumo_label], cantidad, motivo, usuario=current_user_email)
+                    registrar_movimiento(tipo, opciones[insumo_label], cantidad, motivo, usuario=current_user_id)
                     st.success("Salida registrada correctamente.")
                     st.session_state.mostrar_form_salida = False
                 except Exception as e:
